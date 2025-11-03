@@ -260,9 +260,9 @@
           class="emoji"
           src="https://fonts.gstatic.com/s/e/notoemoji/latest/1f4ab/512.gif"
         />
-        Comet - <a href="https://discord.com/invite/UJEqpT42nb">New Discord</a>
+        {{ CUSTOM_NAME_HTML|safe }}
       </p>
-      {{CUSTOM_HEADER_HTML|safe}}
+      {{ CUSTOM_HEADER_HTML|safe }}
     </div>
 
     <div class="form-container">
@@ -589,8 +589,11 @@
 
           // Populate language selects
           // populateSelect("languages_required", Object.keys(languagesEmojis));
-          populateSelect("languages_excluded", Object.keys(languagesEmojis));
-          populateSelect("languages_preferred", Object.keys(languagesEmojis));
+          const customLanguagesList = JSON.parse(`{{ CUSTOM_LANGUAGES_LIST | tojson }}`);
+          const languagesList = customLanguagesList.length ? customLanguagesList : Object.keys(languagesEmojis);
+
+          populateSelect("languages_excluded", languagesList);
+          populateSelect("languages_preferred", languagesList);
 
           document.body.classList.add("ready");
               });

@@ -29,6 +29,7 @@ from .comet import get_comet
 from .stremthru import get_stremthru
 from .aiostreams import get_aiostreams
 from .jackettio import get_jackettio
+from .peerflix import get_peerflix
 from .debridio import get_debridio
 from .torbox import get_torbox
 from .nyaa import get_nyaa
@@ -110,6 +111,8 @@ class TorrentManager:
             tasks.extend(get_all_aiostreams_tasks(self))
         if settings.is_scraper_enabled(settings.SCRAPE_JACKETTIO, self.context):
             tasks.extend(get_all_jackettio_tasks(self))
+        if settings.is_scraper_enabled(settings.SCRAPE_PEERFLIX, self.context):
+            tasks.extend(get_all_peerflix_tasks(self))
         if settings.is_scraper_enabled(settings.SCRAPE_DEBRIDIO, self.context):
             tasks.append(get_debridio(self, session))
         if settings.is_scraper_enabled(settings.SCRAPE_TORBOX, self.context):
@@ -480,4 +483,14 @@ def get_all_jackettio_tasks(manager):
     tasks = []
     for url in urls:
         tasks.append(get_jackettio(manager, url))
+    return tasks
+
+def get_all_peerflix_tasks(manager):
+    urls = settings.PEERFLIX_URL
+    if isinstance(urls, str):
+        urls = [urls]
+
+    tasks = []
+    for url in urls:
+        tasks.append(get_peerflix(manager, url))
     return tasks

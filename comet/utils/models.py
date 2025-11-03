@@ -76,11 +76,15 @@ class AppSettings(BaseSettings):
     AIOSTREAMS_USER_UUID_AND_PASSWORD: Union[str, List[str], None] = None
     SCRAPE_JACKETTIO: Union[bool, str] = False
     JACKETTIO_URL: Optional[Union[str, List[str]]] = None
+    SCRAPE_PEERFLIX: Union[bool, str] = False
+    PEERFLIX_URL: Union[str, List[str]] = "https://addon.peerflix.mov"
     SCRAPE_DEBRIDIO: Union[bool, str] = False
     DEBRIDIO_API_KEY: Optional[str] = None
     SCRAPE_TORBOX: Union[bool, str] = False
     TORBOX_API_KEY: Optional[str] = None
-    CUSTOM_HEADER_HTML: Optional[str] = None
+    CUSTOM_NAME_HTML: Optional[str] = "Comet - <a href=\"https://discord.com/invite/UJEqpT42nb\">New Discord</a>"
+    CUSTOM_HEADER_HTML: Optional[str] = ""
+    CUSTOM_LANGUAGES_LIST: Optional[list[str]] = []
     PROXY_DEBRID_STREAM: Optional[bool] = False
     PROXY_DEBRID_STREAM_PASSWORD: Optional[str] = "".join(
         random.choices(string.ascii_letters + string.digits, k=16)
@@ -117,6 +121,7 @@ class AppSettings(BaseSettings):
         "MEDIAFUSION_URL",
         "AIOSTREAMS_URL",
         "JACKETTIO_URL",
+        "PEERFLIX_URL",
     )
     def normalize_urls(cls, v):
         if isinstance(v, str):

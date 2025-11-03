@@ -275,6 +275,16 @@ def start_log():
         f"Jackettio Scraper: {settings.format_scraper_mode(settings.SCRAPE_JACKETTIO)}{jackettio_url}",
     )
 
+    peerflix_url = (
+        f" - {settings.PEERFLIX_URL}"
+        if settings.is_any_context_enabled(settings.SCRAPE_PEERFLIX)
+        else ""
+    )
+    logger.log(
+        "COMET",
+        f"Peerflix Scraper: {settings.format_scraper_mode(settings.SCRAPE_PEERFLIX)}{peerflix_url}",
+    )
+
     debridio_api_key = (
         f" - {settings.DEBRIDIO_API_KEY}"
         if settings.is_any_context_enabled(settings.SCRAPE_DEBRIDIO)
@@ -308,7 +318,10 @@ def start_log():
     logger.log("COMET", f"StremThru URL: {settings.STREMTHRU_URL}")
 
     logger.log("COMET", f"Remove Adult Content: {bool(settings.REMOVE_ADULT_CONTENT)}")
+    
+    logger.log("COMET", f"Custom Name HTML: {bool(settings.CUSTOM_NAME_HTML)}")
     logger.log("COMET", f"Custom Header HTML: {bool(settings.CUSTOM_HEADER_HTML)}")
+    logger.log("COMET", f"Custom Languages List: {bool(settings.CUSTOM_LANGUAGES_LIST)}")
 
     background_scraper_display = (
         f" - Workers: {settings.BACKGROUND_SCRAPER_CONCURRENT_WORKERS} - Interval: {settings.BACKGROUND_SCRAPER_INTERVAL}s - Max Movies/Run: {settings.BACKGROUND_SCRAPER_MAX_MOVIES_PER_RUN} - Max Series/Run: {settings.BACKGROUND_SCRAPER_MAX_SERIES_PER_RUN}"

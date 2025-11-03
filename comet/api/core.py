@@ -169,9 +169,9 @@ async def configure(request: Request):
         "index.html",
         {
             "request": request,
-            "CUSTOM_HEADER_HTML": settings.CUSTOM_HEADER_HTML
-            if settings.CUSTOM_HEADER_HTML
-            else "",
+            "CUSTOM_NAME_HTML": settings.CUSTOM_NAME_HTML,
+            "CUSTOM_HEADER_HTML": settings.CUSTOM_HEADER_HTML,
+            "CUSTOM_LANGUAGES_LIST": settings.CUSTOM_LANGUAGES_LIST,
             "webConfig": web_config,
             "proxyDebridStream": settings.PROXY_DEBRID_STREAM,
         },

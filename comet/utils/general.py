@@ -321,7 +321,8 @@ def format_title(
         info_parts.append(f"💾 {bytes_to_size(size)}")
 
     if show_tracker:
-        info_parts.append(f"🔎 {tracker}")
+        clean_tracker = tracker.replace("AIOStreams|", "") if tracker else tracker
+        info_parts.append(f"🔎 {clean_tracker}")
 
     if info_parts:
         lines.append(" ".join(info_parts))
