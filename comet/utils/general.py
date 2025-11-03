@@ -32,11 +32,6 @@ def config_check(b64config: str):
         validated_config = ConfigModel(**config)
         validated_config = validated_config.model_dump()
 
-        # Always remove unknown languages
-        validated_config["options"]["remove_unknown_languages"] = True
-        # Just include Spanish and Latino
-        validated_config["languages"]["required"] = ["es", "la"]
-
         for key in list(validated_config["options"].keys()):
             if key not in [
                 "remove_ranks_under",
