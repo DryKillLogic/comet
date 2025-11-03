@@ -357,7 +357,10 @@ async def stream(
             )
 
         initial_torrent_count = len(torrent_manager.torrents)
-
+        logger.log(
+            "SCRAPER",
+            f"Languages checked: {config['rtnSettings']}",
+        )
         torrent_manager.rank_torrents(
             config["rtnSettings"],
             config["rtnRanking"],
