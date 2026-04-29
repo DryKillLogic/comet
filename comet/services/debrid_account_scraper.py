@@ -5,7 +5,7 @@ from datetime import datetime
 from comet.core.database import (_debrid_account_snapshot_ttl,
                                  build_json_list_membership_predicate,
                                  database, encode_json_param)
-from comet.core.execution import get_executor
+from comet.core.execution import run_in_process_executor
 from comet.core.logger import logger
 from comet.core.models import settings
 from comet.debrid.manager import build_account_key_hash
@@ -594,9 +594,7 @@ async def get_account_torrents_for_media(
         if not candidate_torrents:
             continue
 
-        loop = asyncio.get_running_loop()
-        filtered_torrents = await loop.run_in_executor(
-            get_executor(),
+        filtered_torrents = await run_in_process_executor(
             filter_worker,
             candidate_torrents,
             title,

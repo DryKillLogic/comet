@@ -11,7 +11,7 @@ import aiohttp
 import RTN
 
 from comet.core.database import database
-from comet.core.execution import get_executor
+from comet.core.execution import BACKGROUND_EXECUTOR, run_in_process_executor
 from comet.core.logger import logger
 from comet.core.models import settings
 from comet.services.lock import DistributedLock
@@ -93,9 +93,11 @@ class DMMIngester:
             if os.path.exists(extract_dir):
                 shutil.rmtree(extract_dir)
 
-            loop = asyncio.get_running_loop()
-            await loop.run_in_executor(
-                get_executor(), extract_zip_sync, zip_path, extract_dir
+            await run_in_process_executor(
+                extract_zip_sync,
+                zip_path,
+                extract_dir,
+                role=BACKGROUND_EXECUTOR,
             )
 
             os.remove(zip_path)
@@ -131,8 +133,10 @@ class DMMIngester:
 
                     async def process_file_with_sem(fp):
                         async with self.semaphore:
-                            return await loop.run_in_executor(
-                                get_executor(), process_file_sync, fp
+                            return await run_in_process_executor(
+                                process_file_sync,
+                                fp,
+                                role=BACKGROUND_EXECUTOR,
                             )
 
                     futures = [process_file_with_sem(fp) for fp in batch_files]

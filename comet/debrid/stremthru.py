@@ -4,7 +4,7 @@ from urllib.parse import quote, unquote
 import aiohttp
 from RTN import normalize_title, parse, title_match
 
-from comet.core.execution import get_executor
+from comet.core.execution import run_in_process_executor
 from comet.core.logger import logger
 from comet.core.models import settings
 from comet.debrid.exceptions import DebridAuthError, DebridLinkGenerationError
@@ -274,9 +274,8 @@ class StremThru:
 
         parsed_iter = iter([])
         if filenames_to_parse:
-            loop = asyncio.get_running_loop()
-            parsed_results = await loop.run_in_executor(
-                get_executor(), batch_parse, filenames_to_parse
+            parsed_results = await run_in_process_executor(
+                batch_parse, filenames_to_parse
             )
             parsed_iter = iter(parsed_results)
 
@@ -459,9 +458,8 @@ class StremThru:
                 logger.warning(f"No video files found in torrent {hash}")
                 return
 
-            loop = asyncio.get_running_loop()
-            parsed_results = await loop.run_in_executor(
-                get_executor(), batch_parse, filenames_to_parse
+            parsed_results = await run_in_process_executor(
+                batch_parse, filenames_to_parse
             )
 
             scored_files = []

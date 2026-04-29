@@ -3,7 +3,8 @@ import asyncio
 import orjson
 from RTN import DefaultRanking, ParsedData
 
-from comet.core.execution import get_executor
+from comet.core.execution import (BACKGROUND_EXECUTOR, FOREGROUND_EXECUTOR,
+                                  run_in_process_executor)
 from comet.core.logger import logger
 from comet.core.models import CometSettingsModel, database
 from comet.scrapers.manager import scraper_manager
@@ -65,6 +66,12 @@ class TorrentManager:
         self.ready_to_cache = []
         self.ranked_torrents = {}
         self.primary_cached = False
+
+    @property
+    def executor_role(self) -> str:
+        if self.context == "background":
+            return BACKGROUND_EXECUTOR
+        return FOREGROUND_EXECUTOR
 
     def _matches_requested_scope(
         self,
@@ -269,11 +276,9 @@ class TorrentManager:
         if not new_torrents:
             return
 
-        loop = asyncio.get_running_loop()
         chunk_size = 20
         tasks = [
-            loop.run_in_executor(
-                get_executor(),
+            run_in_process_executor(
                 filter_worker,
                 new_torrents[i : i + chunk_size],
                 self.title,
@@ -282,6 +287,7 @@ class TorrentManager:
                 self.media_type,
                 self.aliases,
                 self.remove_adult_content,
+                role=self.executor_role,
             )
             for i in range(0, len(new_torrents), chunk_size)
         ]
@@ -297,9 +303,7 @@ class TorrentManager:
         max_size: int,
         remove_trash: int,
     ):
-        loop = asyncio.get_running_loop()
-        self.ranked_torrents = await loop.run_in_executor(
-            get_executor(),
+        self.ranked_torrents = await run_in_process_executor(
             rank_worker,
             self.torrents,
             rtn_settings,
@@ -307,4 +311,5 @@ class TorrentManager:
             max_results_per_resolution,
             max_size,
             remove_trash,
+            role=self.executor_role,
         )
