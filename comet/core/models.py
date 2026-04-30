@@ -67,7 +67,7 @@ class AppSettings(BaseSettings):
     FASTAPI_WORKERS: Optional[int] = 1
     USE_GUNICORN: Optional[bool] = True
     GUNICORN_PRELOAD_APP: Optional[bool] = True
-    LOG_LEVEL: Optional[str] = "INFO"
+    LOG_LEVEL: Optional[str] = "DEBUG"
     EXECUTOR_MAX_WORKERS: Optional[int] = 1
     ADMIN_DASHBOARD_PASSWORD: Optional[str] = "".join(
         random.choices(string.ascii_letters + string.digits, k=16)
@@ -165,6 +165,10 @@ class AppSettings(BaseSettings):
     SCRAPE_PEERFLIX: Union[bool, str] = False
     SCRAPE_PELISPANDA: Union[bool, str] = False
     SCRAPE_METEOR: Union[bool, str] = False
+    SCRAPE_SOOTIO: Union[bool, str] = False
+    SOOTIO_URL: Union[str, List[str]] = "https://sooti.info"
+    SOOTIO_PROVIDER: Optional[str] = None
+    SOOTIO_PROVIDER_KEY: Optional[str] = None
     CUSTOM_ADDON_NAME: Optional[str] = "Comet"
     CUSTOM_LOGO_URL: Optional[str] = "https://fonts.gstatic.com/s/e/notoemoji/latest/1f4ab/512.gif"
     CUSTOM_DISCORD_URL: Optional[str] = "https://discord.com/invite/UJEqpT42nb"

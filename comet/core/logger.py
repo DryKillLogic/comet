@@ -515,6 +515,16 @@ def log_startup_info(settings):
         f"MediaFusion Scraper: {settings.format_scraper_mode(settings.SCRAPE_MEDIAFUSION)}{mediafusion_display} - Live Search: {settings.MEDIAFUSION_LIVE_SEARCH}",
     )
 
+    sootio_info = (
+        f" {settings.SOOTIO_URL} - {settings.SOOTIO_PROVIDER}|{censor(settings.SOOTIO_PROVIDER_KEY)}"
+        if settings.is_any_context_enabled(settings.SCRAPE_SOOTIO)
+        else ""
+    )
+    logger.log(
+        "COMET",
+        f"Sootio Scraper: {settings.format_scraper_mode(settings.SCRAPE_SOOTIO)}{sootio_info}",
+    )
+
     aiostreams_display = (
         f" - {', '.join(get_urls_with_passwords(settings.AIOSTREAMS_URL, settings.AIOSTREAMS_USER_UUID_AND_PASSWORD))}"
         if settings.is_any_context_enabled(settings.SCRAPE_AIOSTREAMS)
