@@ -14,7 +14,23 @@ logging.getLogger("demagnetize").setLevel(
 )  # disable demagnetize logging
 
 
+def _normalize_log_level(level: str | None) -> str:
+    if not isinstance(level, str) or not level.strip():
+        return "DEBUG"
+
+    normalized_level = level.strip().upper()
+    if (
+        normalized_level in STANDARD_LOG_LEVELS
+        or normalized_level in CUSTOM_LOG_LEVELS
+    ):
+        return normalized_level
+
+    return "DEBUG"
+
+
 def setupLogger(level: str):
+    normalized_level = _normalize_log_level(level)
+
     # Configure custom log levels
     for level_name, level_config in CUSTOM_LOG_LEVELS.items():
         try:
@@ -48,7 +64,7 @@ def setupLogger(level: str):
         handlers=[
             {
                 "sink": sys.stderr,
-                "level": level,
+                "level": normalized_level,
                 "format": log_format,
                 "backtrace": False,
                 "diagnose": False,
