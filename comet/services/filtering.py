@@ -27,6 +27,118 @@ def scrub(t: str):
     return " ".join(normalize_title(t).split())
 
 
+def _strip_leading_english_articles(t: str):
+    tokens = scrub(t).split()
+    while tokens and tokens[0] in {"the", "a", "an"}:
+        tokens = tokens[1:]
+    return " ".join(tokens)
+
+
+def _article_insensitive_title_match(expected_title: str, parsed_title: str):
+    expected = _strip_leading_english_articles(expected_title)
+    parsed = _strip_leading_english_articles(parsed_title)
+    return bool(expected) and expected == parsed
+
+
+def _is_release_noise_token(token: str):
+    if token in {
+        "readnfo",
+        "nfo",
+        "proper",
+        "repack",
+        "rerip",
+        "internal",
+        "extended",
+        "unrated",
+    }:
+        return True
+
+    if len(token) == 4 and token.isdigit():
+        year = int(token)
+        if 1900 <= year <= 2100:
+            return True
+
+    return False
+
+
+def _trailing_noise_title_match(expected_title: str, parsed_title: str):
+    expected_tokens = _strip_leading_english_articles(expected_title).split()
+    parsed_tokens = _strip_leading_english_articles(parsed_title).split()
+
+    if not expected_tokens or len(parsed_tokens) <= len(expected_tokens):
+        return False
+
+    if parsed_tokens[: len(expected_tokens)] != expected_tokens:
+        return False
+
+    trailing_tokens = parsed_tokens[len(expected_tokens) :]
+    return bool(trailing_tokens) and all(
+        _is_release_noise_token(token) for token in trailing_tokens
+    )
+
+
+def _alias_variants(scrubbed_alias: str, main_title_scrubbed: str):
+    variants = {scrubbed_alias}
+
+    if not main_title_scrubbed or scrubbed_alias == main_title_scrubbed:
+        return variants
+
+    prefix = f"{main_title_scrubbed} "
+    if scrubbed_alias.startswith(prefix):
+        remainder = scrubbed_alias[len(prefix) :].strip()
+        if " " in remainder:
+            variants.add(remainder)
+
+    suffix = f" {main_title_scrubbed}"
+    if scrubbed_alias.endswith(suffix):
+        remainder = scrubbed_alias[: -len(suffix)].strip()
+        if " " in remainder:
+            variants.add(remainder)
+
+    return variants
+
+
+def _lang_from_alias_key(alias_key: str):
+    key = (alias_key or "").strip().lower()
+    if not key or key == "ez":
+        return "neutral"
+
+    # Trakt aliases use country codes (e.g. "mx"), while TMDB translations
+    # can use language ("es") or language-region ("es-MX") keys.
+    if key in COUNTRY_TO_LANGUAGE:
+        return COUNTRY_TO_LANGUAGE[key]
+
+    if "-" in key:
+        lang_part = key.split("-", 1)[0]
+        if len(lang_part) == 2 and lang_part.isalpha():
+            return lang_part
+
+    if len(key) == 2 and key.isalpha():
+        return key
+
+    return "neutral"
+
+
+def _region_from_alias_key(alias_key: str):
+    key = (alias_key or "").strip().lower()
+    if not key or key == "ez":
+        return None
+
+    # TMDB language-region keys (e.g. "es-mx").
+    if "-" in key:
+        _, region_part = key.split("-", 1)
+        region_part = region_part.strip().lower()
+        if len(region_part) == 2 and region_part.isalpha():
+            return region_part
+
+    # Country code keys from Trakt (e.g. "mx") map directly to a region tag.
+    # Avoid treating generic language codes (e.g. "es") as regions.
+    if key in COUNTRY_TO_LANGUAGE and len(key) == 2:
+        return key
+
+    return None
+
+
 class _ParseCacheShard:
     __slots__ = ("lock", "data", "inflight")
 
@@ -163,26 +275,34 @@ def filter_worker(
     tz_aliases = set()
     country_aliases = {}
     alias_to_langs = defaultdict(set)
+    alias_to_regions = defaultdict(set)
+
+    def _has_explicit_region_key(alias_key: str):
+        k = (alias_key or "").strip().lower()
+        if "-" in k:
+            left, right = k.split("-", 1)
+            return (
+                len(left) == 2
+                and left.isalpha()
+                and len(right) == 2
+                and right.isalpha()
+            )
+        return False
 
     if settings.SMART_LANGUAGE_DETECTION:
         main_title_scrubbed = scrub(title)
 
         for country, titles in aliases.items():
-            if country == "ez":
-                for t in titles:
-                    scrubbed_t = scrub(t)
-                    tz_aliases.add(scrubbed_t)
-                    alias_to_langs[scrubbed_t].add("neutral")
-                continue
-
-            lang = COUNTRY_TO_LANGUAGE.get(country)
+            lang = _lang_from_alias_key(country)
+            region = _region_from_alias_key(country)
+            explicit_region = _has_explicit_region_key(country)
             for t in titles:
                 scrubbed_t = scrub(t)
-                tz_aliases.add(scrubbed_t)
-                if lang:
-                    alias_to_langs[scrubbed_t].add(lang)
-                else:
-                    alias_to_langs[scrubbed_t].add("neutral")
+                for alias_variant in _alias_variants(scrubbed_t, main_title_scrubbed):
+                    tz_aliases.add(alias_variant)
+                    alias_to_langs[alias_variant].add(lang)
+                    if region and explicit_region:
+                        alias_to_regions[alias_variant].add(region)
 
         # Only trust aliases that map to exactly one non-english language
         # and are not the main title itself.
@@ -190,14 +310,17 @@ def filter_worker(
             if scrubbed_t == main_title_scrubbed:
                 continue
 
-            if len(langs) == 1:
-                lang = list(langs)[0]
-                if lang not in ("neutral", "en"):
-                    country_aliases[scrubbed_t] = lang
+            non_english_langs = {
+                lang for lang in langs if lang not in ("neutral", "en")
+            }
+            if len(non_english_langs) == 1:
+                country_aliases[scrubbed_t] = next(iter(non_english_langs))
     else:
+        main_title_scrubbed = scrub(title)
         for country, titles in aliases.items():
             for t in titles:
-                tz_aliases.add(scrub(t))
+                scrubbed_t = scrub(t)
+                tz_aliases.update(_alias_variants(scrubbed_t, main_title_scrubbed))
 
     ez_aliases_normalized = list(tz_aliases)
     min_year = 0
@@ -229,12 +352,31 @@ def filter_worker(
             continue
 
         if parsed.parsed_title and country_aliases:
-            language = country_aliases.get(scrub(parsed.parsed_title))
+            parsed_title_scrubbed = scrub(parsed.parsed_title)
+            language = country_aliases.get(parsed_title_scrubbed)
             if language and language not in parsed.languages:
                 _log_exclusion(
                     f"🏷️ Added Language (Alias) | {torrent_title} | {language}"
                 )
                 parsed.languages.append(language)
+
+            if language:
+                non_english_langs = {
+                    lang
+                    for lang in alias_to_langs.get(parsed_title_scrubbed, set())
+                    if lang not in ("neutral", "en")
+                }
+                if len(non_english_langs) == 1:
+                    regions = alias_to_regions.get(parsed_title_scrubbed, set())
+                    region = next(iter(regions)) if len(regions) == 1 else None
+
+                    if region:
+                        region_tag = f"{language}-{region}"
+                        if region_tag not in parsed.languages:
+                            _log_exclusion(
+                                f"🌎 Added Region (Alias) | {torrent_title} | {region_tag}"
+                            )
+                            parsed.languages.append(region_tag)
 
         ensure_multi_language(parsed)
 
@@ -246,11 +388,31 @@ def filter_worker(
             _log_exclusion(f"❌ Rejected (No Parsed Title) | {torrent_title}")
             continue
 
+        raw_norm = scrub(torrent_title)
         alias_matched = ez_aliases_normalized and quick_alias_match(
-            scrub(torrent_title), ez_aliases_normalized
+            raw_norm, ez_aliases_normalized
         )
         if not alias_matched:
-            if not title_match(title, parsed.parsed_title, aliases=aliases):
+            title_matches = title_match(title, parsed.parsed_title, aliases=aliases)
+            if (
+                not title_matches
+                and _article_insensitive_title_match(title, parsed.parsed_title)
+            ):
+                title_matches = True
+                _log_exclusion(
+                    f"🧩 Accepted (Article-insensitive Title) | {torrent_title} | Parsed: {parsed.parsed_title} | Expected: {title}"
+                )
+
+            if (
+                not title_matches
+                and _trailing_noise_title_match(title, parsed.parsed_title)
+            ):
+                title_matches = True
+                _log_exclusion(
+                    f"🧩 Accepted (Trailing-noise Title) | {torrent_title} | Parsed: {parsed.parsed_title} | Expected: {title}"
+                )
+
+            if not title_matches:
                 _log_exclusion(
                     f"❌ Rejected (Title Mismatch) | {torrent_title} | Parsed: {parsed.parsed_title} | Expected: {title}"
                 )

@@ -1,4 +1,5 @@
 import aiohttp
+from collections import defaultdict
 
 from comet.core.logger import logger
 from comet.core.models import settings
@@ -116,7 +117,7 @@ class TMDBApi:
                 translations_data = await response.json()
                 translations = translations_data.get("translations", [])
                 # Build a dict of language_code and language-region_code: title/name
-                names_by_language = {}
+                names_by_language = defaultdict(set)
                 for t in translations:
                     lang = t.get("iso_639_1")
                     region = t.get("iso_3166_1")
@@ -124,11 +125,11 @@ class TMDBApi:
                     title = data.get("title") or data.get("name")
                     if lang and title:
                         # Store by language code (e.g., 'es')
-                        names_by_language[lang] = title
+                        names_by_language[lang.lower()].add(title)
                     if lang and region and title:
                         # Store by language-region code (e.g., 'es-MX')
-                        names_by_language[f"{lang}-{region}"] = title
-                return names_by_language
+                        names_by_language[f"{lang.lower()}-{region.lower()}"].add(title)
+                return {k: list(v) for k, v in names_by_language.items()}
         except Exception as e:
             logger.error(f"TMDB: Error getting translations for {media_type} {tmdb_id}: {e}")
             return {}
@@ -180,9 +181,10 @@ class TMDBApi:
         aliases = {}
 
         # Add all language/country titles
-        for lang, title in titles_by_language.items():
-            if title:
-                aliases.setdefault(lang, []).append(title)
+        for lang, titles in titles_by_language.items():
+            for title in titles:
+                if title:
+                    aliases.setdefault(lang, []).append(title)
 
         # Add an "ez" key for all titles
         aliases["ez"] = [

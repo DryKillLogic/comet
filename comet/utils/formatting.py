@@ -68,7 +68,11 @@ languages_emojis = {
     "ru": "🇷🇺",  # Russian
     "ar": "🇸🇦",  # Arabic
     "pt": "🇵🇹",  # Portuguese
+    "pt-pt": "🇵🇹",  # Portuguese (Portugal)
+    "pt-br": "🇧🇷",  # Portuguese (Brazil)
     "es": "🇪🇸",  # Spanish
+    "es-es": "🇪🇸",  # Spanish (Spain)
+    "es-mx": "🇲🇽",  # Spanish (Mexico)
     "fr": "🇫🇷",  # French
     "de": "🇩🇪",  # German
     "it": "🇮🇹",  # Italian
@@ -111,9 +115,19 @@ languages_emojis = {
     "la": "💃🏻",  # Latino
 }
 
+language_emoji_aliases = {
+    "es-es": "es",
+    "es-mx": "la",
+    "pt-pt": "pt",
+    "pt-br": "pt",
+}
+
 
 def get_language_emoji(language: str):
     language_formatted = language.lower()
+    language_formatted = language_emoji_aliases.get(
+        language_formatted, language_formatted
+    )
     return (
         languages_emojis[language_formatted]
         if language_formatted in languages_emojis
