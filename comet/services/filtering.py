@@ -139,6 +139,67 @@ def _region_from_alias_key(alias_key: str):
     return None
 
 
+def _looks_like_spanish_title(text: str):
+    normalized = f" {scrub(text)} "
+    if " de " not in normalized:
+        return False
+
+    spanish_markers = (
+        " el ",
+        " la ",
+        " los ",
+        " las ",
+        " del ",
+        " y ",
+        " en ",
+        " por ",
+        " para ",
+        " una ",
+        " un ",
+        " con ",
+    )
+    return any(marker in normalized for marker in spanish_markers)
+
+
+def _remove_false_german_for_spanish_titles(parsed, torrent_title: str):
+    languages = list(getattr(parsed, "languages", []) or [])
+    if not languages:
+        return
+
+    normalized_languages = {
+        language.lower() for language in languages if isinstance(language, str)
+    }
+    has_german = "de" in normalized_languages or any(
+        language.startswith("de-") for language in normalized_languages
+    )
+
+    if not has_german:
+        return
+
+    parsed_title = getattr(parsed, "parsed_title", "") or ""
+    spanish_title_signal = _looks_like_spanish_title(parsed_title)
+    has_spanish_language = any(
+        language in normalized_languages for language in ("es", "la")
+    ) or any(language.startswith("es-") for language in normalized_languages)
+
+    if not (spanish_title_signal or has_spanish_language):
+        return
+
+    # Keep German when the release title explicitly advertises it.
+    title_tokens = set(scrub(torrent_title).split())
+    if title_tokens & {"german", "deutsch", "deu", "ger", "aleman"}:
+        return
+
+    parsed.languages = [
+        language
+        for language in languages
+        if not (
+            isinstance(language, str)
+            and (language.lower() == "de" or language.lower().startswith("de-"))
+        )
+    ]
+
+
 class _ParseCacheShard:
     __slots__ = ("lock", "data", "inflight")
 
@@ -354,12 +415,6 @@ def filter_worker(
         if parsed.parsed_title and country_aliases:
             parsed_title_scrubbed = scrub(parsed.parsed_title)
             language = country_aliases.get(parsed_title_scrubbed)
-            if language and language not in parsed.languages:
-                _log_exclusion(
-                    f"🏷️ Added Language (Alias) | {torrent_title} | {language}"
-                )
-                parsed.languages.append(language)
-
             if language:
                 non_english_langs = {
                     lang
@@ -370,14 +425,22 @@ def filter_worker(
                     regions = alias_to_regions.get(parsed_title_scrubbed, set())
                     region = next(iter(regions)) if len(regions) == 1 else None
 
-                    if region:
-                        region_tag = f"{language}-{region}"
-                        if region_tag not in parsed.languages:
-                            _log_exclusion(
-                                f"🌎 Added Region (Alias) | {torrent_title} | {region_tag}"
-                            )
-                            parsed.languages.append(region_tag)
+                    language_to_store = f"{language}-{region}" if region else language
+                else:
+                    language_to_store = language
 
+                if language_to_store not in parsed.languages:
+                    if region:
+                        _log_exclusion(
+                            f"🌎 Added Region (Alias) | {torrent_title} | {language_to_store}"
+                        )
+                    else:
+                        _log_exclusion(
+                            f"🏷️ Added Language (Alias) | {torrent_title} | {language_to_store}"
+                        )
+                    parsed.languages.append(language_to_store)
+
+        _remove_false_german_for_spanish_titles(parsed, torrent_title)
         ensure_multi_language(parsed)
 
         if remove_adult_content and parsed.adult:
