@@ -245,20 +245,65 @@ def enrich_metadata_from_stremthru(
         return parsed
 
     languages = list(parsed.languages or [])
-    seen_languages = set(languages)
     updated = False
+
+    def language_family(language: str) -> str:
+        normalized = (language or "").strip().lower()
+        if normalized == "la":
+            return "es"
+        if "-" in normalized:
+            return normalized.split("-", 1)[0]
+        return normalized
+
+    def is_specific(language: str) -> bool:
+        normalized = (language or "").strip().lower()
+        return bool(normalized) and ("-" in normalized or normalized == "la")
+
+    def merge_language(candidate: str) -> bool:
+        candidate = (candidate or "").strip().lower()
+        if not candidate:
+            return False
+
+        normalized_existing = [
+            language.lower() for language in languages if isinstance(language, str)
+        ]
+        if candidate in normalized_existing:
+            return False
+
+        family = language_family(candidate)
+        family_indices = [
+            idx
+            for idx, language in enumerate(languages)
+            if isinstance(language, str) and language_family(language) == family
+        ]
+
+        if not family_indices:
+            languages.append(candidate)
+            return True
+
+        candidate_specific = is_specific(candidate)
+        existing_specific = any(is_specific(languages[idx]) for idx in family_indices)
+
+        if not candidate_specific and existing_specific:
+            return False
+
+        if candidate_specific and existing_specific:
+            return False
+
+        if candidate_specific:
+            languages[family_indices[0]] = candidate
+            return True
+
+        languages.append(candidate)
+        return True
 
     for track in audio_tracks:
         if not isinstance(track, dict):
             continue
 
         language = normalize_stremthru_audio_language(track.get("lang"))
-        if not language or language in seen_languages:
-            continue
-
-        languages.append(language)
-        seen_languages.add(language)
-        updated = True
+        if language and merge_language(language):
+            updated = True
 
     if updated:
         parsed.languages = languages

@@ -139,6 +139,65 @@ def _region_from_alias_key(alias_key: str):
     return None
 
 
+def _language_family(language: str) -> str:
+    normalized = (language or "").strip().lower()
+    if not normalized:
+        return normalized
+
+    if normalized == "la":
+        return "es"
+
+    if "-" in normalized:
+        return normalized.split("-", 1)[0]
+
+    return normalized
+
+
+def _is_specific_language(language: str) -> bool:
+    normalized = (language or "").strip().lower()
+    return bool(normalized) and ("-" in normalized or normalized == "la")
+
+
+def _merge_alias_language(languages, candidate_language: str):
+    candidate = (candidate_language or "").strip().lower()
+    if not candidate:
+        return
+
+    if candidate in languages:
+        return
+
+    family = _language_family(candidate)
+    same_family = [
+        language
+        for language in languages
+        if isinstance(language, str) and _language_family(language) == family
+    ]
+
+    if not same_family:
+        languages.append(candidate)
+        return
+
+    candidate_specific = _is_specific_language(candidate)
+    existing_specific = [lang for lang in same_family if _is_specific_language(lang)]
+
+    if candidate_specific:
+        if existing_specific:
+            return
+
+        for idx, language in enumerate(languages):
+            if isinstance(language, str) and _language_family(language) == family:
+                languages[idx] = candidate
+                return
+        languages.append(candidate)
+        return
+
+    # Generic candidate: only add when family has no specific variant.
+    if existing_specific:
+        return
+
+    languages.append(candidate)
+
+
 def _looks_like_spanish_title(text: str):
     normalized = f" {scrub(text)} "
     if " de " not in normalized:
@@ -172,20 +231,17 @@ def _remove_false_german_for_spanish_titles(parsed, torrent_title: str):
     has_german = "de" in normalized_languages or any(
         language.startswith("de-") for language in normalized_languages
     )
-
     if not has_german:
         return
 
     parsed_title = getattr(parsed, "parsed_title", "") or ""
-    spanish_title_signal = _looks_like_spanish_title(parsed_title)
-    has_spanish_language = any(
+    has_spanish_signal = _looks_like_spanish_title(parsed_title) or any(
         language in normalized_languages for language in ("es", "la")
-    ) or any(language.startswith("es-") for language in normalized_languages)
-
-    if not (spanish_title_signal or has_spanish_language):
+    )
+    if not has_spanish_signal:
         return
 
-    # Keep German when the release title explicitly advertises it.
+    # Keep explicit German releases.
     title_tokens = set(scrub(torrent_title).split())
     if title_tokens & {"german", "deutsch", "deu", "ger", "aleman"}:
         return
@@ -338,31 +394,18 @@ def filter_worker(
     alias_to_langs = defaultdict(set)
     alias_to_regions = defaultdict(set)
 
-    def _has_explicit_region_key(alias_key: str):
-        k = (alias_key or "").strip().lower()
-        if "-" in k:
-            left, right = k.split("-", 1)
-            return (
-                len(left) == 2
-                and left.isalpha()
-                and len(right) == 2
-                and right.isalpha()
-            )
-        return False
-
     if settings.SMART_LANGUAGE_DETECTION:
         main_title_scrubbed = scrub(title)
 
         for country, titles in aliases.items():
             lang = _lang_from_alias_key(country)
             region = _region_from_alias_key(country)
-            explicit_region = _has_explicit_region_key(country)
             for t in titles:
                 scrubbed_t = scrub(t)
                 for alias_variant in _alias_variants(scrubbed_t, main_title_scrubbed):
                     tz_aliases.add(alias_variant)
                     alias_to_langs[alias_variant].add(lang)
-                    if region and explicit_region:
+                    if region:
                         alias_to_regions[alias_variant].add(region)
 
         # Only trust aliases that map to exactly one non-english language
@@ -429,7 +472,9 @@ def filter_worker(
                 else:
                     language_to_store = language
 
-                if language_to_store not in parsed.languages:
+                before_languages = list(parsed.languages)
+                _merge_alias_language(parsed.languages, language_to_store)
+                if parsed.languages != before_languages:
                     if region:
                         _log_exclusion(
                             f"🌎 Added Region (Alias) | {torrent_title} | {language_to_store}"
@@ -438,7 +483,6 @@ def filter_worker(
                         _log_exclusion(
                             f"🏷️ Added Language (Alias) | {torrent_title} | {language_to_store}"
                         )
-                    parsed.languages.append(language_to_store)
 
         _remove_false_german_for_spanish_titles(parsed, torrent_title)
         ensure_multi_language(parsed)
