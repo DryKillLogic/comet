@@ -18,7 +18,7 @@ from RTN.models import (AudioRankModel, CustomRank, CustomRanksConfig,
                         RipsRankModel)
 
 from comet.core.db_router import ReplicaAwareDatabase
-from comet.core.logger import logger, setupLogger
+from comet.core.logger import logger
 
 _comet_fk_enabled = False
 _SQLITE_BUSY_TIMEOUT_MS = 30000
@@ -67,7 +67,6 @@ class AppSettings(BaseSettings):
     FASTAPI_WORKERS: Optional[int] = 1
     USE_GUNICORN: Optional[bool] = True
     GUNICORN_PRELOAD_APP: Optional[bool] = True
-    LOG_LEVEL: Optional[str] = "DEBUG"
     EXECUTOR_MAX_WORKERS: Optional[int] = 1
     ADMIN_DASHBOARD_PASSWORD: Optional[str] = "".join(
         random.choices(string.ascii_letters + string.digits, k=16)
@@ -554,7 +553,6 @@ def _build_stremio_api_prefix():
 
 
 settings = AppSettings()
-setupLogger(settings.LOG_LEVEL)
 STREMIO_API_PREFIX = _build_stremio_api_prefix()
 settings.STREMIO_API_PREFIX = STREMIO_API_PREFIX
 
